@@ -6,7 +6,7 @@ A small command-line tool that takes a qobuz ID and matches it to MusicBrainz re
 
 Before use, a Qobuz App ID must be obtained (see https://github.com/ImAiiR/QobuzDownloaderX/issues/2#issuecomment-575852400)
 
-This must then either be passed directly to the application via the command-line or the environment variable `QOBUZ_IDENTNFIER_APPID`, or placed in a file whose path is passed to the application by the same method.
+This must then either be passed directly to the application via the command-line or the environment variable `QOBUZ_IDENTIFIER_APPID`, or placed in a file whose path is passed to the application by the same method.
 
 ## Usage
 

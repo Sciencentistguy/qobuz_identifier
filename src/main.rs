@@ -21,9 +21,9 @@ struct Args {
 
     /// The file to read the qobuz app id from, or the appid itself.
     #[clap(
-        long = "qobuz_app_id_file",
+        long = "qobuz-app-id-file",
         default_value = "/secrets/qobuz_identifier_app_id",
-        env = "QOBUZ_IDENTNFIER_APPID",
+        env = "QOBUZ_IDENTIFIER_APPID",
         value_parser = read_qobuz_app_id,
     )]
     qobuz_app_id: String,
