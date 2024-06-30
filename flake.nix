@@ -45,7 +45,7 @@
                 SystemConfiguration
               ]);
             postInstall = ''
-              ln -s $out/bin/qobuz_identifier $out/bin/qobuz-identifier
+              mv $out/bin/qobuz_identifier $out/bin/qobuz-identifier
             '';
             meta = with lib; {
               license = licenses.mpl20;
