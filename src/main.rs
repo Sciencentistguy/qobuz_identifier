@@ -1,16 +1,24 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use clap::Parser;
 use itertools::Itertools as _;
 use once_cell::sync::Lazy;
 use reqwest::{Client, Method};
+use serde::Deserialize;
 use serde_json::Value;
 
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use tokio::task::JoinSet;
 use url::Url;
 
 static ARGS: Lazy<Args> = Lazy::new(Args::parse);
+
+#[derive(Clone, Debug, Deserialize)]
+struct LoginDetails {
+    appid: String,
+    username: String,
+    password: String,
+}
 
 /// A small command-line tool that takes a qobuz ID and matches it to MusicBrainz releases by
 /// barcode.
@@ -23,34 +31,23 @@ struct Args {
     #[clap(
         long = "qobuz-app-id-file",
         default_value = "/secrets/qobuz_identifier_app_id",
-        env = "QOBUZ_IDENTIFIER_APPID",
+        env = "QBID_DETAILS",
         value_parser = read_qobuz_app_id,
     )]
-    qobuz_app_id: String,
+    login_details: LoginDetails,
 }
 
-fn read_qobuz_app_id(path: &str) -> Result<String> {
-    if path.chars().all(|c| c.is_ascii_digit()) {
-        // This is likely an appid rather than a path
-        return Ok(path.to_owned());
-    }
-    let path = Path::new(path);
-    if !path.exists() {
-        return Err(eyre!(
-            "Specified qobuz app id filepath {} does not exist",
-            path.display()
-        ));
-    }
-    let mut str = std::fs::read_to_string(path)?;
-    str.truncate(str.trim().len());
-    Ok(str)
+fn read_qobuz_app_id(path: &str) -> Result<LoginDetails> {
+    let str = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&str)?)
 }
 
-async fn get_qobuz_album(client: &Client, id: &str) -> Result<Value> {
+async fn get_qobuz_album(client: &Client, id: &str, user_auth_token: &str) -> Result<Value> {
     let request = client
         .request(Method::GET, "https://www.qobuz.com/api.json/0.2/album/get")
         .query(&[("album_id", id), ("offset", "0"), ("limit", "20")])
-        .header("x-app-id", ARGS.qobuz_app_id.as_str())
+        .header("x-app-id", ARGS.login_details.appid.as_str())
+        .header("x-user-auth-token", user_auth_token)
         .build()?;
     let response = client.execute(request).await?;
     let json = response.json().await?;
@@ -116,7 +113,27 @@ async fn main() -> Result<()> {
         .unwrap();
 
     let client = Arc::new(Client::new());
-    let response = get_qobuz_album(&client, id).await?;
+
+    let auth_token = {
+        let req = client
+            .request(Method::GET, "https://www.qobuz.com/api.json/0.2/user/login")
+            .header("X-app-id", ARGS.login_details.appid.as_str())
+            .header("X-username", ARGS.login_details.username.as_str())
+            .header("X-password", ARGS.login_details.password.as_str())
+            .build()?;
+
+        let resp: serde_json::Value = client.execute(req).await?.json().await?;
+
+        let serde_json::Value::String(tok) = resp
+            .get("user_auth_token")
+            .expect("login should return auth token")
+        else {
+            panic!("user-auth-token should be a string")
+        };
+        tok.clone()
+    };
+
+    let response = get_qobuz_album(&client, id, &auth_token).await?;
 
     if matches!(
         response.get("status").and_then(|x| x.as_str()),
